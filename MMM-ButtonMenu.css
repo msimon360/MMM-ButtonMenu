@@ -1,0 +1,62 @@
+.mmm-buttonmenu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.mmm-buttonmenu.is-hidden {
+    display: none;
+}
+
+.buttonmenu-panel {
+    min-width: 28rem;
+    padding: 1.6rem 2rem 1.2rem;
+    background: rgba(8, 8, 8, 0.92);
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.buttonmenu-title {
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.buttonmenu-row {
+    margin: 0.25rem 0;
+    padding: 0.45rem 0.9rem;
+    color: #f2f2f2;
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+.buttonmenu-row.is-highlight {
+    background: #f5c518;
+    color: #111;
+}
+
+.buttonmenu-row.is-confirm {
+    background: #a32020;
+    color: #fff;
+}
+
+.buttonmenu-confirm {
+    margin-top: 0.15rem;
+    font-size: 1.1rem;
+    letter-spacing: 0.02em;
+}
+
+.buttonmenu-note {
+    margin-top: 0.9rem;
+    font-size: 1rem;
+    opacity: 0.75;
+}

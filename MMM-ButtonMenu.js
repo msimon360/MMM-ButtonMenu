@@ -1,0 +1,237 @@
+const { createMenu, dispatch } = require("./lib/menuState");
+
+Module.register("MMM-ButtonMenu", {
+    defaults: {
+        gpioChip: "gpiochip0",
+        pins: {
+            menu: 17,
+            next: 27,
+            select: 22
+        },
+        debounceMs: 50,
+        holdMs: 60000,
+        menuTimeoutMs: 8000,
+        homePage: 0,
+        pages: [],
+        commands: {
+            blank: "",
+            unblank: "",
+            restart: "pm2 restart mm",
+            reboot: "sudo reboot"
+        }
+    },
+
+    start() {
+        this.config.pins = Object.assign(
+            { menu: 17, next: 27, select: 22 },
+            this.config.pins
+        );
+        this.config.commands = Object.assign(
+            {
+                blank: "",
+                unblank: "",
+                restart: "pm2 restart mm",
+                reboot: "sudo reboot"
+            },
+            this.config.commands
+        );
+
+        this.menu = createMenu(this.config);
+        this.holdTimer = null;
+        this.menuTimer = null;
+        this.holdRemainingMs = 0;
+        this.holdStartedAt = 0;
+
+        Log.info("[MMM-ButtonMenu] Starting");
+        this.sendSocketNotification("START_GPIO", {
+            gpioChip: this.config.gpioChip,
+            pins: this.config.pins,
+            debounceMs: this.config.debounceMs
+        });
+    },
+
+    getStyles() {
+        return ["MMM-ButtonMenu.css"];
+    },
+
+    socketNotificationReceived(notification, payload) {
+        if (notification === "BUTTON_PRESS" && payload && payload.button) {
+            this.applyDispatch(payload.button);
+        }
+    },
+
+    applyDispatch(event) {
+        const result = dispatch(this.menu, event);
+        this.menu = result.state;
+        this.applyEffects(result.effects);
+        this.updateDom(0);
+    },
+
+    applyEffects(effects) {
+        effects.forEach((effect) => {
+            if (effect.type === "notification") {
+                if (effect.payload === undefined) {
+                    this.sendNotification(effect.name);
+                } else {
+                    this.sendNotification(effect.name, effect.payload);
+                }
+                return;
+            }
+
+            if (effect.type === "command") {
+                const commands = this.config.commands || {};
+                this.sendSocketNotification("RUN_COMMAND", {
+                    name: effect.name,
+                    command: commands[effect.name] || ""
+                });
+                return;
+            }
+
+            if (effect.type === "hold") {
+                if (effect.action === "start") {
+                    this.armHold(effect.ms);
+                } else if (effect.action === "pause") {
+                    this.pauseHold();
+                } else if (effect.action === "resume") {
+                    this.resumeHold();
+                } else if (effect.action === "clear") {
+                    this.clearHold();
+                }
+                return;
+            }
+
+            if (effect.type === "menuTimer") {
+                if (effect.action === "start") {
+                    this.armMenuTimer(effect.ms);
+                } else {
+                    this.clearMenuTimer();
+                }
+            }
+        });
+    },
+
+    armHold(ms) {
+        this.clearHoldTimer();
+        if (!(ms > 0)) {
+            this.holdRemainingMs = 0;
+            return;
+        }
+        this.holdRemainingMs = ms;
+        this.holdStartedAt = Date.now();
+        this.holdTimer = setTimeout(() => {
+            this.holdTimer = null;
+            this.holdRemainingMs = 0;
+            this.applyDispatch("holdElapsed");
+        }, ms);
+    },
+
+    pauseHold() {
+        if (!this.holdTimer) {
+            return;
+        }
+        clearTimeout(this.holdTimer);
+        this.holdTimer = null;
+        const elapsed = Date.now() - this.holdStartedAt;
+        this.holdRemainingMs = Math.max(0, this.holdRemainingMs - elapsed);
+    },
+
+    resumeHold() {
+        if (this.holdTimer || !(this.holdRemainingMs > 0)) {
+            return;
+        }
+        this.armHold(this.holdRemainingMs);
+    },
+
+    clearHold() {
+        this.clearHoldTimer();
+        this.holdRemainingMs = 0;
+    },
+
+    clearHoldTimer() {
+        if (this.holdTimer) {
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+        }
+    },
+
+    armMenuTimer(ms) {
+        this.clearMenuTimer();
+        if (!(ms > 0)) {
+            return;
+        }
+        this.menuTimer = setTimeout(() => {
+            this.menuTimer = null;
+            this.applyDispatch("menuTimeout");
+        }, ms);
+    },
+
+    clearMenuTimer() {
+        if (this.menuTimer) {
+            clearTimeout(this.menuTimer);
+            this.menuTimer = null;
+        }
+    },
+
+    getDom() {
+        if (!this.menu) {
+            this.menu = createMenu(this.config);
+        }
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "mmm-buttonmenu";
+
+        if (!this.menu.menuOpen) {
+            wrapper.classList.add("is-hidden");
+            return wrapper;
+        }
+
+        const panel = document.createElement("div");
+        panel.className = "buttonmenu-panel";
+
+        const title = document.createElement("div");
+        title.className = "buttonmenu-title";
+        title.innerText = "Menu";
+        panel.appendChild(title);
+
+        this.menu.rows.forEach((row, index) => {
+            const item = document.createElement("div");
+            item.className = "buttonmenu-row";
+            const confirming = this.menu.confirming &&
+                this.menu.confirming === row.command &&
+                index === this.menu.highlight;
+
+            if (index === this.menu.highlight) {
+                item.classList.add("is-highlight");
+            }
+            if (confirming) {
+                item.classList.add("is-confirm");
+            }
+
+            const label = document.createElement("div");
+            label.className = "buttonmenu-label";
+            label.innerText = row.label;
+            item.appendChild(label);
+
+            if (confirming) {
+                const hint = document.createElement("div");
+                hint.className = "buttonmenu-confirm";
+                hint.innerText = "Press Select again";
+                item.appendChild(hint);
+            }
+
+            panel.appendChild(item);
+        });
+
+        const note = document.createElement("div");
+        note.className = "buttonmenu-note";
+        if (this.menu.confirming) {
+            note.innerText = "Next leaves this row. Menu cancels.";
+        } else {
+            note.innerText = "Next moves. Select chooses. Menu closes.";
+        }
+        panel.appendChild(note);
+
+        wrapper.appendChild(panel);
+        return wrapper;
+    }
+});

@@ -1,0 +1,9 @@
+node_modules/
+.cursor/
+.DS_Store
+*.log
+npm-debug.log*
+.env
+*.pem
+.idea/
+.vscode/
