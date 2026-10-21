@@ -1,6 +1,6 @@
 # MMM-ButtonMenu
 
-A [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) module for a three-button DigiFrame menu. Menu, Next, and Select pick another [MMM-pages](https://github.com/edward-shen/MMM-pages) page, show it for a configured time, then return to the primary page.
+A [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror) module for a three-button DigiFrame menu. Menu, Next, and Select pick another [MMM-pages](https://github.com/sdetweil/MMM-pages) page, show it for a configured time, then return to the primary page.
 
 The mirror rests on the primary page. MMM-pages rotation stays off. This module owns the hold timer and sends `HOME_PAGE` when it ends.
 
@@ -64,7 +64,7 @@ gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 17 27 22
 - **Next** (BCM 27): move the highlight to the next row, wrapping to the top. While the menu is hidden, Next does nothing. Next also leaves a restart or reboot confirmation without running it.
 - **Select** (BCM 22): run the highlighted row. While the menu is hidden, Select does nothing.
 
-The first row is **Primary**, which sends `HOME_PAGE` immediately. The next rows are the alternate pages. Select sends `PAGE_SELECT` with that page’s index (an integer) and starts that page’s hold timer. Choosing another page restarts the timer with the new hold.
+The first row is **Primary**, which sends `HOME_PAGE` immediately. The next rows are the alternate pages. Select sends `PAGE_CHANGED` with that page’s index (an integer, starting at 0) and starts that page’s hold timer. Choosing another page restarts the timer with the new hold. [sdetweil/MMM-pages](https://github.com/sdetweil/MMM-pages) listens for `PAGE_CHANGED`, not `PAGE_SELECT`.
 
 System rows stay at the bottom: Blank, Unblank, Restart MagicMirror, and Reboot. Blank and Unblank run on the first Select. Restart and Reboot ask for a second Select. Menu cancels that confirmation.
 
@@ -120,17 +120,16 @@ Blank, unblank, restart, and reboot run only after the on-screen menu confirms t
 
 ## Turn rotation off
 
-MMM-pages page timings advance to the next page. They are not used to return home. In `config.js`, turn automatic rotation off and keep today’s layout as page 0:
+The Pi uses [sdetweil/MMM-pages](https://github.com/sdetweil/MMM-pages). That fork turns rotation off with `rotationTime: 0`. It does not read a `timings` object, and it has no `rotationHomePageHidden`. `rotationHomePage: 0` stops it from returning home on its own. `homePage: 0` is today’s layout. `modules` is still a 2D array, and `fixed` is the list of modules that stay on every page.
+
+`pageTimeout` is a per-page rotation interval. Its `pageNumber` starts at 1, and it advances the rotation. It is not this module’s hold. Leave it unset. MMM-ButtonMenu sends `HOME_PAGE` when `holdMs` ends.
 
 ```js
 {
   module: "MMM-pages",
   config: {
-    timings: {
-      default: 0
-    },
+    rotationTime: 0,
     rotationHomePage: 0,
-    rotationHomePageHidden: 0,
     homePage: 0,
     modules: [
       [], // today's layout
@@ -145,9 +144,9 @@ MMM-pages page timings advance to the next page. They are not used to return hom
 }
 ```
 
-Leave every per-page `timings` entry unset or at `0`. A positive page timing still rotates that page. `examples/pages-config.js` is the same block, plus the button menu.
+`examples/pages-config.js` is the same block, plus the button menu.
 
-While an alternate page is up, this module also sends `PAUSE_ROTATION`. Returning home sends `RESUME_ROTATION`. With the timings above, rotation was never running.
+While an alternate page is up, this module also sends `PAUSE_ROTATION`. Returning home sends `RESUME_ROTATION`. With `rotationTime` and `rotationHomePage` at 0, those notifications do not start rotation.
 
 ## Tests
 
