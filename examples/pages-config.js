@@ -1,9 +1,9 @@
 /*
  * DigiFrame page list. Merge these objects into config/config.js.
  *
- * This is for sdetweil/MMM-pages. Rotation stays off with rotationTime 0.
- * That fork has no timings object. MMM-ButtonMenu owns the hold and
- * sends HOME_PAGE when it ends. Page changes use PAGE_CHANGED.
+ * MMM-pages rotation stays off. Page timings advance to the next page,
+ * so they are not the return-home timer. MMM-ButtonMenu owns that hold
+ * and sends HOME_PAGE when it ends.
  *
  * Keep MMM-ButtonMenu in `fixed` so the menu is drawn on every page.
  */
@@ -12,8 +12,11 @@ module.exports = [
     {
         module: "MMM-pages",
         config: {
-            rotationTime: 0,
+            timings: {
+                default: 0
+            },
             rotationHomePage: 0,
+            rotationHomePageHidden: 0,
             homePage: 0,
             modules: [
                 [], // today's layout

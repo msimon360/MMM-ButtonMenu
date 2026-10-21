@@ -84,7 +84,7 @@ test("Select visits a page", () => {
     assert.equal(result.state.pageIndex, 1);
     assert.equal(result.state.holdMs, 1000);
     assert.equal(result.state.holdPaused, false);
-    const select = result.effects.find((effect) => effect.name === "PAGE_CHANGED");
+    const select = result.effects.find((effect) => effect.name === "PAGE_SELECT");
     assert.ok(select);
     assert.equal(select.payload, 1);
     assert.equal(typeof select.payload, "number");
@@ -287,7 +287,7 @@ test("Primary sends HOME_PAGE immediately", () => {
         effect.type === "notification" && effect.name === "HOME_PAGE"
     ));
     assert.equal(
-        result.effects.some((effect) => effect.name === "PAGE_CHANGED"),
+        result.effects.some((effect) => effect.name === "PAGE_SELECT"),
         false
     );
 });
