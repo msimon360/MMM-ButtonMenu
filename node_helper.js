@@ -1,5 +1,6 @@
 const NodeHelper = require("node_helper");
 const { spawn } = require("child_process");
+const { parseGpiomonLine } = require("./lib/gpiomonLine");
 
 const COMMANDS = {
     blank: true,
@@ -7,24 +8,6 @@ const COMMANDS = {
     restart: true,
     reboot: true
 };
-
-function parseGpiomonLine(line) {
-    const edgeMatch = String(line).match(/\b(rising|falling)\b/);
-    if (!edgeMatch) {
-        return null;
-    }
-
-    const after = line.slice(edgeMatch.index + edgeMatch[1].length);
-    const offsetMatch = after.match(/gpiochip\d+\s+(\d+)/i) || after.match(/(\d+)/);
-    if (!offsetMatch) {
-        return null;
-    }
-
-    return {
-        edge: edgeMatch[1],
-        offset: Number(offsetMatch[1])
-    };
-}
 
 function isPin(value) {
     return Number.isInteger(value) && value >= 0;

@@ -1,6 +1,17 @@
-const { createMenu, dispatch } = require("./lib/menuState");
+function buttonMenuState() {
+    const root = typeof globalThis !== "undefined" ? globalThis : window;
+    return root.MMMButtonMenuState || null;
+}
 
 Module.register("MMM-ButtonMenu", {
+    /*
+     * MagicMirror 2.38 evaluates this file in the browser, where require
+     * is not defined. lib/menuState.js is loaded as a script first.
+     */
+    getScripts() {
+        return ["lib/menuState.js"];
+    },
+
     defaults: {
         gpioChip: "gpiochip0",
         pins: {
@@ -36,7 +47,13 @@ Module.register("MMM-ButtonMenu", {
             this.config.commands
         );
 
-        this.menu = createMenu(this.config);
+        this.menuState = buttonMenuState();
+        if (!this.menuState) {
+            Log.error("[MMM-ButtonMenu] lib/menuState.js did not load");
+            return;
+        }
+
+        this.menu = this.menuState.createMenu(this.config);
         this.holdTimer = null;
         this.menuTimer = null;
         this.holdRemainingMs = 0;
@@ -61,7 +78,7 @@ Module.register("MMM-ButtonMenu", {
     },
 
     applyDispatch(event) {
-        const result = dispatch(this.menu, event);
+        const result = this.menuState.dispatch(this.menu, event);
         this.menu = result.state;
         this.applyEffects(result.effects);
         this.updateDom(0);
@@ -174,7 +191,14 @@ Module.register("MMM-ButtonMenu", {
 
     getDom() {
         if (!this.menu) {
-            this.menu = createMenu(this.config);
+            const stateApi = this.menuState || buttonMenuState();
+            if (!stateApi) {
+                const missing = document.createElement("div");
+                missing.className = "mmm-buttonmenu is-hidden";
+                return missing;
+            }
+            this.menuState = stateApi;
+            this.menu = stateApi.createMenu(this.config);
         }
 
         const wrapper = document.createElement("div");
