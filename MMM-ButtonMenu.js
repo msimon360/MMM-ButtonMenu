@@ -5,11 +5,13 @@ function buttonMenuState() {
 
 Module.register("MMM-ButtonMenu", {
     /*
-     * MagicMirror 2.38 evaluates this file in the browser, where require
-     * is not defined. lib/menuState.js is loaded as a script first.
+     * MagicMirror 2.38 treats a getScripts path that contains "/" as a
+     * site-root URL. The filename has no slash, so the loader prefixes
+     * the module directory. require is not used here: this file runs
+     * in the browser.
      */
     getScripts() {
-        return ["lib/menuState.js"];
+        return ["menuState.js"];
     },
 
     defaults: {
@@ -49,7 +51,7 @@ Module.register("MMM-ButtonMenu", {
 
         this.menuState = buttonMenuState();
         if (!this.menuState) {
-            Log.error("[MMM-ButtonMenu] lib/menuState.js did not load");
+            Log.error("[MMM-ButtonMenu] menuState.js did not load");
             return;
         }
 

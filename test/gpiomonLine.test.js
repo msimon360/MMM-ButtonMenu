@@ -55,6 +55,5 @@ test("the browser module file does not call require", () => {
         "utf8"
     );
     assert.equal(/\brequire\s*\(/.test(source), false);
-    assert.match(source, /getScripts\s*\(\)\s*\{/);
-    assert.match(source, /lib\/menuState\.js/);
+    assert.match(source, /return \["menuState\.js"\]/);
 });

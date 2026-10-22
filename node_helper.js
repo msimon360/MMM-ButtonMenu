@@ -13,6 +13,21 @@ function isPin(value) {
     return Number.isInteger(value) && value >= 0;
 }
 
+function monitorSignature(config) {
+    const source = config || {};
+    const pins = Object.assign(
+        { menu: 17, next: 27, select: 22 },
+        source.pins
+    );
+    return JSON.stringify({
+        gpioChip: source.gpioChip || "gpiochip0",
+        menu: pins.menu,
+        next: pins.next,
+        select: pins.select,
+        debounceMs: typeof source.debounceMs === "number" ? source.debounceMs : 50
+    });
+}
+
 module.exports = NodeHelper.create({
 
     start() {
@@ -24,7 +39,18 @@ module.exports = NodeHelper.create({
         this.lastPressAt = {};
         this.buttonsByPin = {};
         this.debounceMs = 50;
+        this.monitorSignature = null;
         console.log("[MMM-ButtonMenu] Node helper started");
+        if (typeof this.getServerModuleConfig === "function") {
+            try {
+                this.startMonitor(this.getServerModuleConfig() || {});
+            } catch (error) {
+                console.error(
+                    "[MMM-ButtonMenu] Could not read server config:",
+                    error.message
+                );
+            }
+        }
     },
 
     stop() {
@@ -50,7 +76,13 @@ module.exports = NodeHelper.create({
     },
 
     startMonitor(config) {
+        const signature = monitorSignature(config);
+        if (this.monitor && this.monitorSignature === signature) {
+            return;
+        }
+
         this.stopRequested = false;
+        this.monitorSignature = signature;
         this.monitorGeneration += 1;
         const generation = this.monitorGeneration;
 

@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createMenu, dispatch } = require("../lib/menuState");
+const { createMenu, dispatch } = require("../menuState");
 
 test("menu state is available without require in the browser", () => {
     assert.equal(globalThis.MMMButtonMenuState.createMenu, createMenu);
