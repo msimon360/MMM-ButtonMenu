@@ -40,6 +40,7 @@ module.exports = NodeHelper.create({
         this.buttonsByPin = {};
         this.debounceMs = 50;
         this.monitorSignature = null;
+        this.stdbufMissing = false;
         console.log("[MMM-ButtonMenu] Node helper started");
         if (typeof this.getServerModuleConfig === "function") {
             try {
@@ -137,15 +138,30 @@ module.exports = NodeHelper.create({
             "--edges=both"
         ].concat(pinList.map(String));
 
-        console.log("[MMM-ButtonMenu] gpiomon " + args.join(" "));
+        /*
+         * gpiomon block-buffers stdout when it is not a TTY, so presses
+         * never arrive. stdbuf -oL forces a line buffer. Same gpiomon args.
+         */
+        const command = this.stdbufMissing ? "gpiomon" : "stdbuf";
+        const commandArgs = this.stdbufMissing
+            ? args
+            : ["-oL", "-eL", "gpiomon"].concat(args);
+        this.spawnMonitor(command, commandArgs, args, generation, config);
+    },
 
-        const child = spawn("gpiomon", args, {
+    spawnMonitor(command, commandArgs, gpiomonArgs, generation, config) {
+        console.log(
+            "[MMM-ButtonMenu] " + command + " " + commandArgs.join(" ")
+        );
+
+        const child = spawn(command, commandArgs, {
             stdio: ["ignore", "pipe", "pipe"]
         });
         this.monitor = child;
+        let replaced = false;
 
         const scheduleRestart = () => {
-            if (this.stopRequested || generation !== this.monitorGeneration) {
+            if (this.stopRequested || generation !== this.monitorGeneration || replaced) {
                 return;
             }
             if (this.restartTimer) {
@@ -178,7 +194,25 @@ module.exports = NodeHelper.create({
         });
 
         child.on("error", (error) => {
-            console.error("[MMM-ButtonMenu] gpiomon failed:", error.message);
+            if (command === "stdbuf" && error.code === "ENOENT") {
+                replaced = true;
+                this.stdbufMissing = true;
+                console.error(
+                    "[MMM-ButtonMenu] stdbuf is missing; running gpiomon without line buffering"
+                );
+                if (!this.stopRequested && generation === this.monitorGeneration) {
+                    this.spawnMonitor(
+                        "gpiomon",
+                        gpiomonArgs,
+                        gpiomonArgs,
+                        generation,
+                        config
+                    );
+                }
+                return;
+            }
+
+            console.error("[MMM-ButtonMenu] " + command + " failed:", error.message);
             if (error.code === "ENOENT") {
                 console.error(
                     "[MMM-ButtonMenu] Install the gpiod package so gpiomon is on PATH."
@@ -188,7 +222,7 @@ module.exports = NodeHelper.create({
         });
 
         child.on("exit", (code) => {
-            if (generation !== this.monitorGeneration) {
+            if (replaced || generation !== this.monitorGeneration || this.monitor !== child) {
                 return;
             }
             console.error("[MMM-ButtonMenu] gpiomon exited (" + code + ")");
@@ -215,6 +249,7 @@ module.exports = NodeHelper.create({
         }
         this.lastPressAt[parsed.offset] = now;
 
+        console.log("[MMM-ButtonMenu] press " + button);
         this.sendSocketNotification("BUTTON_PRESS", {
             button: button,
             pin: parsed.offset
