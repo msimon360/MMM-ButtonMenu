@@ -59,7 +59,6 @@ Module.register("MMM-ButtonMenu", {
         this.menuState = buttonMenuState();
         if (!this.menuState) {
             Log.error("[MMM-ButtonMenu] menuState.js did not load");
-            this.sendSocketNotification("MENU_SCRIPT_MISSING");
         } else {
             this.menu = this.menuState.createMenu(this.config);
         }
@@ -86,20 +85,11 @@ Module.register("MMM-ButtonMenu", {
         }
 
         /*
-         * Handle the press even when menuState.js did not load.
-         * A draw error is reported on MENU_ACK and must not skip it.
+         * Still handle the press when menuState.js did not load.
+         * applyDispatch catches a draw error so one throw cannot
+         * stop the next press.
          */
-        let failure = null;
-        try {
-            failure = this.applyDispatch(payload.button);
-        } catch (error) {
-            failure = error && error.message ? error.message : String(error);
-        } finally {
-            this.sendSocketNotification("MENU_ACK", {
-                open: !!(this.menu && this.menu.menuOpen),
-                failure: failure
-            });
-        }
+        this.applyDispatch(payload.button);
     },
 
     ensureMenu() {
@@ -123,19 +113,13 @@ Module.register("MMM-ButtonMenu", {
         }
         const result = this.menuState.dispatch(this.menu, event);
         this.menu = result.state;
-        if (event === "select" && this.menuState.describeSelect) {
-            this.sendSocketNotification("SELECT_LOG", {
-                line: this.menuState.describeSelect(result)
-            });
-        }
         this.applyEffects(result.effects);
         try {
             this.syncOverlay();
             this.updateDom(0);
-        } catch (error) {
-            return error && error.message ? error.message : String(error);
+        } catch {
+            // Leave the menu state in place. The next press still runs.
         }
-        return null;
     },
 
     applyEffects(effects) {

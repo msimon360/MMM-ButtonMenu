@@ -2,12 +2,11 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createMenu, dispatch, describeSelect } = require("../menuState");
+const { createMenu, dispatch } = require("../menuState");
 
 test("menu state is available without require in the browser", () => {
     assert.equal(globalThis.MMMButtonMenuState.createMenu, createMenu);
     assert.equal(globalThis.MMMButtonMenuState.dispatch, dispatch);
-    assert.equal(globalThis.MMMButtonMenuState.describeSelect, describeSelect);
 });
 
 function sampleConfig() {
@@ -296,7 +295,6 @@ test("the third row sends 0-based PAGE_SELECT 2, not 3", () => {
     const select = result.effects.find((effect) => effect.name === "PAGE_SELECT");
     assert.equal(select.payload, 2);
     assert.equal(typeof select.payload, "number");
-    assert.equal(describeSelect(result), "select Month PAGE_SELECT 2");
 });
 
 test("an omitted pageIndex for the third row is still 2", () => {
@@ -310,24 +308,9 @@ test("an omitted pageIndex for the third row is still 2", () => {
     current = dispatch(current, "next").state;
     current = dispatch(current, "next").state;
     const result = dispatch(current, "select");
-    assert.equal(describeSelect(result), "select Month PAGE_SELECT 2");
-});
-
-test("Primary select logs HOME_PAGE and a command select is skipped", () => {
-    const opened = dispatch(createMenu(sampleConfig()), "menu");
-    const home = dispatch(opened.state, "select");
-    assert.equal(describeSelect(home), "select Primary HOME_PAGE");
-
-    let current = opened.state;
-    const blankAt = current.rows.findIndex((row) => row.command === "blank");
-    for (let i = 0; i < blankAt; i += 1) {
-        current = dispatch(current, "next").state;
-    }
-    const blank = dispatch(current, "select");
-    assert.equal(
-        describeSelect(blank),
-        "select Blank skipped: command blank, not a page"
-    );
+    const select = result.effects.find((effect) => effect.name === "PAGE_SELECT");
+    assert.equal(select.payload, 2);
+    assert.equal(typeof select.payload, "number");
 });
 
 test("Primary sends HOME_PAGE immediately", () => {

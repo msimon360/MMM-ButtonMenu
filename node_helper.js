@@ -5,7 +5,6 @@ const {
     gpiomonArgs,
     gpiodMajor
 } = require("./lib/gpiomonLine");
-const { createScreenAck } = require("./lib/screenAck");
 
 const COMMANDS = {
     blank: true,
@@ -65,9 +64,6 @@ module.exports = NodeHelper.create({
         this.monitorSignature = null;
         this.stdbufMissing = false;
         this.gpiodMajor = null;
-        this.screenAck = createScreenAck((line) => {
-            console.log(line);
-        });
         console.log("[MMM-ButtonMenu] Node helper started");
         if (typeof this.getServerModuleConfig === "function") {
             try {
@@ -85,26 +81,11 @@ module.exports = NodeHelper.create({
         this.stopRequested = true;
         this.clearRestart();
         this.killMonitors();
-        if (this.screenAck) {
-            this.screenAck.stop();
-        }
     },
 
     socketNotificationReceived(notification, payload) {
-        if (notification === "MENU_SCRIPT_MISSING") {
-            console.error("[MMM-ButtonMenu] menu script missing");
-        }
-
         if (notification === "START_GPIO") {
             this.startMonitor(payload || {});
-        }
-
-        if (notification === "MENU_ACK") {
-            this.screenAck.answered(payload);
-        }
-
-        if (notification === "SELECT_LOG" && payload && payload.line) {
-            console.log("[MMM-ButtonMenu] " + payload.line);
         }
 
         if (notification === "RUN_COMMAND") {
@@ -311,8 +292,6 @@ module.exports = NodeHelper.create({
         }
         this.lastPressAt[entry.pin] = now;
 
-        console.log("[MMM-ButtonMenu] press " + entry.button);
-        this.screenAck.sent();
         this.sendSocketNotification("BUTTON_PRESS", {
             button: entry.button,
             pin: entry.pin

@@ -119,7 +119,6 @@ test("start opens the helper socket even when the menu script is missing", () =>
         path.join(__dirname, "..", "node_helper.js"),
         "utf8"
     );
-    assert.match(source, /MENU_SCRIPT_MISSING/);
     assert.match(source, /sendSocketNotification\("START_GPIO"/);
     assert.doesNotMatch(
         source,
@@ -129,15 +128,7 @@ test("start opens the helper socket even when the menu script is missing", () =>
     assert.match(source, /removeChild\(this\.overlay\)/);
     assert.match(source, /return \["menuState\.js"\]/);
     assert.doesNotMatch(source, /getScripts\(\) \{\s*return \[[^\]]*\//);
-    assert.match(source, /finally \{[\s\S]*MENU_ACK/);
-    assert.match(helper, /\[MMM-ButtonMenu\] menu script missing/);
-    assert.match(helper, /screenAck\.sent\(\)/);
-    const ack = fs.readFileSync(
-        path.join(__dirname, "..", "lib", "screenAck.js"),
-        "utf8"
-    );
-    assert.match(ack, /\[MMM-ButtonMenu\] screen did not answer/);
-    assert.match(ack, /\[MMM-ButtonMenu\] menu draw failed: /);
-    assert.match(ack, /\[MMM-ButtonMenu\] menu shown/);
-    assert.match(ack, /\[MMM-ButtonMenu\] menu hidden/);
+    assert.match(source, /syncOverlay\(\);[\s\S]*updateDom\(0\);[\s\S]*catch/);
+    assert.doesNotMatch(source, /MENU_ACK|MENU_SCRIPT_MISSING|SELECT_LOG/);
+    assert.doesNotMatch(helper, /screenAck|MENU_ACK|menu script missing|\[MMM-ButtonMenu\] press/);
 });
