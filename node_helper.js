@@ -84,8 +84,20 @@ module.exports = NodeHelper.create({
     },
 
     socketNotificationReceived(notification, payload) {
+        if (notification === "MENU_SCRIPT_MISSING") {
+            console.error("[MMM-ButtonMenu] menu script missing");
+        }
+
         if (notification === "START_GPIO") {
             this.startMonitor(payload || {});
+        }
+
+        if (notification === "MENU_ACK") {
+            if (payload && payload.open) {
+                console.log("[MMM-ButtonMenu] menu shown");
+            } else {
+                console.log("[MMM-ButtonMenu] menu hidden");
+            }
         }
 
         if (notification === "RUN_COMMAND") {

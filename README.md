@@ -19,7 +19,7 @@ The folder name has to be `MMM-ButtonMenu`, which is the name MagicMirror loads.
 
 Restart MagicMirror after adding the module (`pm2 restart mm` or your usual command).
 
-Put `MMM-ButtonMenu` in the MMM-pages `fixed` list so the overlay is drawn on every page. See [examples/pages-config.js](examples/pages-config.js).
+Put `MMM-ButtonMenu` in the MMM-pages `fixed` list. See [examples/pages-config.js](examples/pages-config.js). The open menu is attached to the page itself, outside the module wrapper, because MMM-pages hides modules that are not in `fixed` and that also hides a `position: fixed` child.
 
 ## Wiring
 

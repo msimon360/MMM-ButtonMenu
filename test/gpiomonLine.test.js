@@ -109,3 +109,26 @@ test("the browser module file does not call require", () => {
     assert.equal(/\brequire\s*\(/.test(source), false);
     assert.match(source, /return \["menuState\.js"\]/);
 });
+
+test("start opens the helper socket even when the menu script is missing", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "MMM-ButtonMenu.js"),
+        "utf8"
+    );
+    const helper = fs.readFileSync(
+        path.join(__dirname, "..", "node_helper.js"),
+        "utf8"
+    );
+    assert.match(source, /MENU_SCRIPT_MISSING/);
+    assert.match(source, /sendSocketNotification\("START_GPIO"/);
+    assert.doesNotMatch(
+        source,
+        /menuState\.js did not load"\);\s*return;/
+    );
+    assert.match(source, /document\.body\.appendChild\(this\.overlay\)/);
+    assert.match(source, /removeChild\(this\.overlay\)/);
+    assert.match(source, /MENU_ACK/);
+    assert.match(helper, /\[MMM-ButtonMenu\] menu script missing/);
+    assert.match(helper, /\[MMM-ButtonMenu\] menu shown/);
+    assert.match(helper, /\[MMM-ButtonMenu\] menu hidden/);
+});

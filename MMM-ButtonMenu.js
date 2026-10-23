@@ -49,18 +49,25 @@ Module.register("MMM-ButtonMenu", {
             this.config.commands
         );
 
-        this.menuState = buttonMenuState();
-        if (!this.menuState) {
-            Log.error("[MMM-ButtonMenu] menuState.js did not load");
-            return;
-        }
-
-        this.menu = this.menuState.createMenu(this.config);
+        this.overlay = null;
+        this.menu = null;
         this.holdTimer = null;
         this.menuTimer = null;
         this.holdRemainingMs = 0;
         this.holdStartedAt = 0;
 
+        this.menuState = buttonMenuState();
+        if (!this.menuState) {
+            Log.error("[MMM-ButtonMenu] menuState.js did not load");
+            this.sendSocketNotification("MENU_SCRIPT_MISSING");
+        } else {
+            this.menu = this.menuState.createMenu(this.config);
+        }
+
+        /*
+         * Always open the helper socket. Returning before this call
+         * leaves BUTTON_PRESS with nowhere to go.
+         */
         Log.info("[MMM-ButtonMenu] Starting");
         this.sendSocketNotification("START_GPIO", {
             gpioChip: this.config.gpioChip,
@@ -76,13 +83,35 @@ Module.register("MMM-ButtonMenu", {
     socketNotificationReceived(notification, payload) {
         if (notification === "BUTTON_PRESS" && payload && payload.button) {
             this.applyDispatch(payload.button);
+            this.sendSocketNotification("MENU_ACK", {
+                open: !!(this.menu && this.menu.menuOpen)
+            });
         }
     },
 
+    ensureMenu() {
+        if (this.menu && this.menuState) {
+            return true;
+        }
+        const stateApi = this.menuState || buttonMenuState();
+        if (!stateApi) {
+            return false;
+        }
+        this.menuState = stateApi;
+        if (!this.menu) {
+            this.menu = stateApi.createMenu(this.config);
+        }
+        return true;
+    },
+
     applyDispatch(event) {
+        if (!this.ensureMenu()) {
+            return;
+        }
         const result = this.menuState.dispatch(this.menu, event);
         this.menu = result.state;
         this.applyEffects(result.effects);
+        this.syncOverlay();
         this.updateDom(0);
     },
 
@@ -191,26 +220,40 @@ Module.register("MMM-ButtonMenu", {
         }
     },
 
-    getDom() {
-        if (!this.menu) {
-            const stateApi = this.menuState || buttonMenuState();
-            if (!stateApi) {
-                const missing = document.createElement("div");
-                missing.className = "mmm-buttonmenu is-hidden";
-                return missing;
-            }
-            this.menuState = stateApi;
-            this.menu = stateApi.createMenu(this.config);
+    /*
+     * MMM-pages hides modules that are not in `fixed`. A position:fixed
+     * child of that wrapper is hidden with it, so the open menu is
+     * attached to document.body and removed when the menu closes.
+     */
+    syncOverlay() {
+        if (typeof document === "undefined" || !document.body) {
+            return;
+        }
+        if (!this.menu || !this.menu.menuOpen) {
+            this.removeOverlay();
+            return;
         }
 
-        const wrapper = document.createElement("div");
-        wrapper.className = "mmm-buttonmenu";
-
-        if (!this.menu.menuOpen) {
-            wrapper.classList.add("is-hidden");
-            return wrapper;
+        if (!this.overlay) {
+            this.overlay = document.createElement("div");
+            this.overlay.className = "mmm-buttonmenu";
+            document.body.appendChild(this.overlay);
         }
 
+        while (this.overlay.firstChild) {
+            this.overlay.removeChild(this.overlay.firstChild);
+        }
+        this.overlay.appendChild(this.buildPanel());
+    },
+
+    removeOverlay() {
+        if (this.overlay && this.overlay.parentNode) {
+            this.overlay.parentNode.removeChild(this.overlay);
+        }
+        this.overlay = null;
+    },
+
+    buildPanel() {
         const panel = document.createElement("div");
         panel.className = "buttonmenu-panel";
 
@@ -256,8 +299,14 @@ Module.register("MMM-ButtonMenu", {
             note.innerText = "Next moves. Select chooses. Menu closes.";
         }
         panel.appendChild(note);
+        return panel;
+    },
 
-        wrapper.appendChild(panel);
-        return wrapper;
+    getDom() {
+        this.ensureMenu();
+        this.syncOverlay();
+        const slot = document.createElement("div");
+        slot.className = "mmm-buttonmenu-slot";
+        return slot;
     }
 });
