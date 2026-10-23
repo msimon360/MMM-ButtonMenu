@@ -1,6 +1,10 @@
 const NodeHelper = require("node_helper");
-const { spawn } = require("child_process");
-const { parseGpiomonLine } = require("./lib/gpiomonLine");
+const { spawn, execFileSync } = require("child_process");
+const {
+    edgeFromGpiomonLine,
+    gpiomonArgs,
+    gpiodMajor
+} = require("./lib/gpiomonLine");
 
 const COMMANDS = {
     blank: true,
@@ -28,19 +32,38 @@ function monitorSignature(config) {
     });
 }
 
+function readGpiodMajor() {
+    try {
+        const output = execFileSync("gpiomon", ["--version"], {
+            encoding: "utf8"
+        });
+        return gpiodMajor(output);
+    } catch (error) {
+        const text = String(error.stdout || "") + String(error.stderr || "");
+        if (/v\d+\./.test(text)) {
+            return gpiodMajor(text);
+        }
+        return 2;
+    }
+}
+
+function childAlive(child) {
+    return child && child.exitCode === null && child.signalCode === null && !child.killed;
+}
+
 module.exports = NodeHelper.create({
 
     start() {
-        this.monitor = null;
+        this.monitors = [];
+        this.expectedCount = 0;
         this.monitorGeneration = 0;
         this.stopRequested = false;
         this.restartTimer = null;
-        this.buffer = "";
         this.lastPressAt = {};
-        this.buttonsByPin = {};
         this.debounceMs = 50;
         this.monitorSignature = null;
         this.stdbufMissing = false;
+        this.gpiodMajor = null;
         console.log("[MMM-ButtonMenu] Node helper started");
         if (typeof this.getServerModuleConfig === "function") {
             try {
@@ -56,14 +79,8 @@ module.exports = NodeHelper.create({
 
     stop() {
         this.stopRequested = true;
-        if (this.restartTimer) {
-            clearTimeout(this.restartTimer);
-            this.restartTimer = null;
-        }
-        if (this.monitor) {
-            this.monitor.kill("SIGTERM");
-            this.monitor = null;
-        }
+        this.clearRestart();
+        this.killMonitors();
     },
 
     socketNotificationReceived(notification, payload) {
@@ -76,9 +93,34 @@ module.exports = NodeHelper.create({
         }
     },
 
+    clearRestart() {
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
+    },
+
+    killMonitors() {
+        const children = this.monitors;
+        this.monitors = [];
+        children.forEach((entry) => {
+            entry.replaced = true;
+            if (entry.child) {
+                entry.child.kill("SIGTERM");
+            }
+        });
+    },
+
+    monitorsCoverSignature(signature) {
+        return this.expectedCount > 0 &&
+            this.monitorSignature === signature &&
+            this.monitors.length === this.expectedCount &&
+            this.monitors.every((entry) => childAlive(entry.child));
+    },
+
     startMonitor(config) {
         const signature = monitorSignature(config);
-        if (this.monitor && this.monitorSignature === signature) {
+        if (this.monitorsCoverSignature(signature)) {
             return;
         }
 
@@ -87,14 +129,8 @@ module.exports = NodeHelper.create({
         this.monitorGeneration += 1;
         const generation = this.monitorGeneration;
 
-        if (this.restartTimer) {
-            clearTimeout(this.restartTimer);
-            this.restartTimer = null;
-        }
-        if (this.monitor) {
-            this.monitor.kill("SIGTERM");
-            this.monitor = null;
-        }
+        this.clearRestart();
+        this.killMonitors();
 
         const pins = Object.assign(
             { menu: 17, next: 27, select: 22 },
@@ -104,52 +140,58 @@ module.exports = NodeHelper.create({
         this.debounceMs = typeof config.debounceMs === "number"
             ? config.debounceMs
             : 50;
-        this.buffer = "";
         this.lastPressAt = {};
-        this.buttonsByPin = {};
 
-        ["menu", "next", "select"].forEach((name) => {
-            if (!isPin(pins[name])) {
-                console.error(
-                    "[MMM-ButtonMenu] Ignoring invalid pin for " + name
-                );
-                return;
+        const buttons = ["menu", "next", "select"].filter((name) => {
+            if (isPin(pins[name])) {
+                return true;
             }
-            this.buttonsByPin[pins[name]] = name;
-        });
+            console.error(
+                "[MMM-ButtonMenu] Ignoring invalid pin for " + name
+            );
+            return false;
+        }).map((name) => ({ button: name, pin: pins[name] }));
 
-        const pinList = ["menu", "next", "select"]
-            .map((name) => pins[name])
-            .filter(isPin);
-
-        if (!pinList.length) {
+        this.expectedCount = buttons.length;
+        if (!buttons.length) {
             console.error("[MMM-ButtonMenu] No GPIO pins configured");
             return;
         }
 
-        /*
-         * libgpiod 2.2: the chip is --chip, not a positional argument.
-         * Internal pull-up. A press is active low, so a falling edge
-         * is the button. Debounce is applied here, not via sysfs.
-         */
-        const args = [
-            "--chip=" + chip,
-            "--bias=pull-up",
-            "--edges=both"
-        ].concat(pinList.map(String));
+        if (this.gpiodMajor == null) {
+            this.gpiodMajor = readGpiodMajor();
+            console.log("[MMM-ButtonMenu] libgpiod v" + this.gpiodMajor);
+        }
 
         /*
-         * gpiomon block-buffers stdout when it is not a TTY, so presses
-         * never arrive. stdbuf -oL forces a line buffer. Same gpiomon args.
+         * One gpiomon per pin, same flags MMM-Buttons uses for libgpiod 2:
+         * -c chip -b pull-up -p <ms>ms <pin>. The press is the falling
+         * edge on that process. The chip stays the configured gpiochip0.
+         * stdbuf keeps the pipe line-buffered when gpiomon does not flush.
          */
+        buttons.forEach((button) => {
+            this.spawnPin({
+                button: button.button,
+                pin: button.pin,
+                chip: chip,
+                generation: generation,
+                config: config
+            });
+        });
+    },
+
+    spawnPin(spec) {
+        const args = gpiomonArgs(
+            this.gpiodMajor,
+            spec.chip,
+            spec.pin,
+            this.debounceMs
+        );
         const command = this.stdbufMissing ? "gpiomon" : "stdbuf";
         const commandArgs = this.stdbufMissing
             ? args
             : ["-oL", "-eL", "gpiomon"].concat(args);
-        this.spawnMonitor(command, commandArgs, args, generation, config);
-    },
 
-    spawnMonitor(command, commandArgs, gpiomonArgs, generation, config) {
         console.log(
             "[MMM-ButtonMenu] " + command + " " + commandArgs.join(" ")
         );
@@ -157,11 +199,18 @@ module.exports = NodeHelper.create({
         const child = spawn(command, commandArgs, {
             stdio: ["ignore", "pipe", "pipe"]
         });
-        this.monitor = child;
-        let replaced = false;
+        const entry = {
+            pin: spec.pin,
+            button: spec.button,
+            child: child,
+            buffer: "",
+            replaced: false,
+            generation: spec.generation
+        };
+        this.monitors.push(entry);
 
         const scheduleRestart = () => {
-            if (this.stopRequested || generation !== this.monitorGeneration || replaced) {
+            if (this.stopRequested || spec.generation !== this.monitorGeneration || entry.replaced) {
                 return;
             }
             if (this.restartTimer) {
@@ -169,50 +218,48 @@ module.exports = NodeHelper.create({
             }
             this.restartTimer = setTimeout(() => {
                 this.restartTimer = null;
-                if (!this.stopRequested && generation === this.monitorGeneration) {
-                    this.startMonitor(config);
+                if (!this.stopRequested && spec.generation === this.monitorGeneration) {
+                    this.startMonitor(spec.config);
                 }
             }, 5000);
         };
 
         child.stdout.on("data", (chunk) => {
-            this.buffer += chunk.toString();
-            let newline = this.buffer.indexOf("\n");
+            entry.buffer += chunk.toString();
+            let newline = entry.buffer.indexOf("\n");
             while (newline >= 0) {
-                const line = this.buffer.slice(0, newline).replace(/\r$/, "");
-                this.buffer = this.buffer.slice(newline + 1);
-                this.handleMonitorLine(line);
-                newline = this.buffer.indexOf("\n");
+                const line = entry.buffer.slice(0, newline).replace(/\r$/, "");
+                entry.buffer = entry.buffer.slice(newline + 1);
+                this.handleMonitorLine(entry, line);
+                newline = entry.buffer.indexOf("\n");
             }
         });
 
         child.stderr.on("data", (chunk) => {
             const text = chunk.toString().trim();
             if (text) {
-                console.error("[MMM-ButtonMenu] gpiomon:", text);
+                console.error("[MMM-ButtonMenu] gpiomon " + spec.button + ":", text);
             }
         });
 
         child.on("error", (error) => {
             if (command === "stdbuf" && error.code === "ENOENT") {
-                replaced = true;
+                entry.replaced = true;
                 this.stdbufMissing = true;
+                this.monitors = this.monitors.filter((item) => item !== entry);
                 console.error(
                     "[MMM-ButtonMenu] stdbuf is missing; running gpiomon without line buffering"
                 );
-                if (!this.stopRequested && generation === this.monitorGeneration) {
-                    this.spawnMonitor(
-                        "gpiomon",
-                        gpiomonArgs,
-                        gpiomonArgs,
-                        generation,
-                        config
-                    );
+                if (!this.stopRequested && spec.generation === this.monitorGeneration) {
+                    this.spawnPin(spec);
                 }
                 return;
             }
 
-            console.error("[MMM-ButtonMenu] " + command + " failed:", error.message);
+            console.error(
+                "[MMM-ButtonMenu] " + command + " for " + spec.button + " failed:",
+                error.message
+            );
             if (error.code === "ENOENT") {
                 console.error(
                     "[MMM-ButtonMenu] Install the gpiod package so gpiomon is on PATH."
@@ -222,37 +269,33 @@ module.exports = NodeHelper.create({
         });
 
         child.on("exit", (code) => {
-            if (replaced || generation !== this.monitorGeneration || this.monitor !== child) {
+            if (entry.replaced || spec.generation !== this.monitorGeneration) {
                 return;
             }
-            console.error("[MMM-ButtonMenu] gpiomon exited (" + code + ")");
-            this.monitor = null;
+            console.error(
+                "[MMM-ButtonMenu] gpiomon for " + spec.button + " exited (" + code + ")"
+            );
+            this.monitors = this.monitors.filter((item) => item !== entry);
             scheduleRestart();
         });
     },
 
-    handleMonitorLine(line) {
-        const parsed = parseGpiomonLine(line);
-        if (!parsed || parsed.edge !== "falling") {
-            return;
-        }
-
-        const button = this.buttonsByPin[parsed.offset];
-        if (!button) {
+    handleMonitorLine(entry, line) {
+        if (edgeFromGpiomonLine(line) !== "falling") {
             return;
         }
 
         const now = Date.now();
-        const last = this.lastPressAt[parsed.offset] || 0;
+        const last = this.lastPressAt[entry.pin] || 0;
         if (now - last < this.debounceMs) {
             return;
         }
-        this.lastPressAt[parsed.offset] = now;
+        this.lastPressAt[entry.pin] = now;
 
-        console.log("[MMM-ButtonMenu] press " + button);
+        console.log("[MMM-ButtonMenu] press " + entry.button);
         this.sendSocketNotification("BUTTON_PRESS", {
-            button: button,
-            pin: parsed.offset
+            button: entry.button,
+            pin: entry.pin
         });
     },
 

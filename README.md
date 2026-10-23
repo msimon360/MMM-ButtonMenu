@@ -42,21 +42,17 @@ The module enables the internal pull-up, so a press reads low.
 
 ## gpiomon test
 
-Debian 13’s `gpiomon` (libgpiod 2.2) takes the chip as `--chip`, not as a positional argument. The 40-pin header is the chip labeled `pinctrl-rp1`. On this Pi 5 that is `gpiochip0`.
+Debian 13’s `gpiomon` (libgpiod 2.2) takes the chip as `-c` / `--chip`, not as a positional argument. The 40-pin header is the chip labeled `pinctrl-rp1`. On this Pi 5 that is `gpiochip0`.
 
-Confirm it with `gpiodetect`, then:
-
-```bash
-gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 17
-```
-
-Press Menu and the line should change. Repeat for 27 and 22. Swap the three GPIO roles in config if a button lands on the wrong action.
-
-The module runs the same flags on all three pins:
+Confirm it with `gpiodetect`, then watch one pin:
 
 ```bash
-gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 17 27 22
+gpiomon -c gpiochip0 -b pull-up -p 50ms 17
 ```
+
+Press Menu. A press prints `falling`. Repeat for 27 and 22. Swap the three GPIO roles in config if a button lands on the wrong action.
+
+The module starts that same command once per pin (Menu 17, Next 27, Select 22). A falling line from a pin’s own process is that button. The chip stays `gpiochip0`.
 
 ## Button behavior
 
@@ -102,11 +98,11 @@ The menu closes itself after `menuTimeoutMs` with no press. That hides the menu 
 
 | Option | Default | Description |
 |---|---|---|
-| `gpioChip` | `gpiochip0` | Chip passed to `gpiomon --chip`. The header chip is the one `gpiodetect` labels `pinctrl-rp1`. |
+| `gpioChip` | `gpiochip0` | Chip passed to `gpiomon -c`. The header chip is the one `gpiodetect` labels `pinctrl-rp1`. |
 | `pins.menu` | `17` | BCM pin for Menu |
 | `pins.next` | `27` | BCM pin for Next |
 | `pins.select` | `22` | BCM pin for Select |
-| `debounceMs` | `50` | Ignore another press on the same pin inside this window |
+| `debounceMs` | `50` | Hardware debounce passed to `gpiomon -p`, and a second window in the helper |
 | `holdMs` | `60000` | How long an alternate page stays up before `HOME_PAGE` |
 | `menuTimeoutMs` | `8000` | Close the menu after this long with no press |
 | `homePage` | `0` | Page index treated as primary |

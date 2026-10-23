@@ -19,15 +19,13 @@ echo
 echo "Find the common wire with a meter before it is plugged in."
 echo "It is the only wire that beeps to each of the other three while that button is held."
 echo
-echo "gpiomon commands (libgpiod 2.2: the chip is --chip, not a positional argument):"
+echo "gpiomon commands (libgpiod 2.2: one process per pin, chip is -c):"
 echo
-echo "  gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 17"
-echo "  gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 27"
-echo "  gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 22"
+echo "  gpiomon -c gpiochip0 -b pull-up -p 50ms 17"
+echo "  gpiomon -c gpiochip0 -b pull-up -p 50ms 27"
+echo "  gpiomon -c gpiochip0 -b pull-up -p 50ms 22"
 echo
-echo "The module watches all three pins with:"
-echo
-echo "  gpiomon --chip=gpiochip0 --bias=pull-up --edges=both 17 27 22"
+echo "The module starts those three processes. A falling line is a press."
 echo
 
 if command -v gpiodetect >/dev/null 2>&1; then
@@ -35,7 +33,7 @@ if command -v gpiodetect >/dev/null 2>&1; then
     gpiodetect || true
     echo
     echo "The 40-pin header is the chip labeled pinctrl-rp1."
-    echo "On this Pi 5 that chip is gpiochip0. Use that name after --chip."
+    echo "On this Pi 5 that chip is gpiochip0. Use that name after -c."
 else
     echo "gpiodetect is not available on this machine, so no GPIO chips are listed."
     echo "On the Pi, install the gpiod package and run gpiodetect."
