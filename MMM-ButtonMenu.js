@@ -81,10 +81,23 @@ Module.register("MMM-ButtonMenu", {
     },
 
     socketNotificationReceived(notification, payload) {
-        if (notification === "BUTTON_PRESS" && payload && payload.button) {
-            this.applyDispatch(payload.button);
+        if (notification !== "BUTTON_PRESS" || !payload || !payload.button) {
+            return;
+        }
+
+        /*
+         * Handle the press even when menuState.js did not load.
+         * A draw error is reported on MENU_ACK and must not skip it.
+         */
+        let failure = null;
+        try {
+            failure = this.applyDispatch(payload.button);
+        } catch (error) {
+            failure = error && error.message ? error.message : String(error);
+        } finally {
             this.sendSocketNotification("MENU_ACK", {
-                open: !!(this.menu && this.menu.menuOpen)
+                open: !!(this.menu && this.menu.menuOpen),
+                failure: failure
             });
         }
     },
@@ -111,8 +124,13 @@ Module.register("MMM-ButtonMenu", {
         const result = this.menuState.dispatch(this.menu, event);
         this.menu = result.state;
         this.applyEffects(result.effects);
-        this.syncOverlay();
-        this.updateDom(0);
+        try {
+            this.syncOverlay();
+            this.updateDom(0);
+        } catch (error) {
+            return error && error.message ? error.message : String(error);
+        }
+        return null;
     },
 
     applyEffects(effects) {
