@@ -62,6 +62,8 @@ The module starts that same command once per pin (Menu 17, Next 27, Select 22). 
 
 The first row is **Primary**, which sends `HOME_PAGE` immediately. The next rows are the alternate pages. Select sends `PAGE_SELECT` with that page’s index (an integer) and starts that page’s hold timer. Choosing another page restarts the timer with the new hold.
 
+edward-shen/MMM-pages changes the screen only when that integer is from 0 through `modules.length - 1`. Any other index is ignored, so the menu still closes and the display stays put. The row after two Next presses is the second `pages` entry. Its payload is that entry’s `pageIndex`, or `2` when `pageIndex` is omitted. That slot in `modules` has to be an array of module names. pm2 logs `[MMM-ButtonMenu] select Month PAGE_SELECT 2` (or `HOME_PAGE`, or `skipped:` and the reason).
+
 System rows stay at the bottom: Blank, Unblank, Restart MagicMirror, and Reboot. Blank and Unblank run on the first Select. Restart and Reboot ask for a second Select. Menu cancels that confirmation.
 
 The menu closes itself after `menuTimeoutMs` with no press. That hides the menu the same way the Menu button does, and it cancels a pending restart or reboot.
@@ -106,7 +108,7 @@ The menu closes itself after `menuTimeoutMs` with no press. That hides the menu 
 | `holdMs` | `60000` | How long an alternate page stays up before `HOME_PAGE` |
 | `menuTimeoutMs` | `8000` | Close the menu after this long with no press |
 | `homePage` | `0` | Page index treated as primary |
-| `pages` | `[]` | Alternate rows: `{ label, pageIndex, holdMs }`. `pageIndex` defaults to the row’s place after Primary (1, then 2, …). `holdMs` overrides the default for that page. |
+| `pages` | `[]` | Alternate rows: `{ label, pageIndex, holdMs }`. `pageIndex` is the 0-based MMM-pages index. Home is 0 and is not in this list, so the default for the first entry is 1, then 2. The third menu row sends `PAGE_SELECT 2`. `holdMs` overrides the default for that page. |
 | `commands.blank` | `""` | CEC blank command. Copy it from `sudo crontab -l`. Empty commands are not run. |
 | `commands.unblank` | `""` | CEC unblank command. Copy it from `sudo crontab -l`. |
 | `commands.restart` | `pm2 restart mm` | Run only after a second Select on Restart MagicMirror |

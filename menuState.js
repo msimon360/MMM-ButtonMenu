@@ -31,6 +31,11 @@ function normalizeConfig(config) {
         }
         pages.push({
             label: page.label || ("Page " + (index + 1)),
+            /*
+             * MMM-pages is 0-based and home is page 0. This list starts
+             * after Primary, so the first entry is page 1, not page 0
+             * and not a 1-based count of the menu rows.
+             */
             pageIndex: Number.isInteger(page.pageIndex)
                 ? page.pageIndex
                 : index + 1,
@@ -269,9 +274,46 @@ function dispatch(state, event) {
     return { state: state, effects: [] };
 }
 
+/*
+ * pm2 only sees the node helper. Select's page notification is sent in
+ * the browser, so the helper logs this line. MMM-pages ignores
+ * PAGE_SELECT unless the payload is an integer inside modules.
+ */
+function describeSelect(result) {
+    const state = result && result.state;
+    const effects = (result && result.effects) || [];
+    const row = state && state.rows ? state.rows[state.highlight] : null;
+    const label = row && row.label ? row.label : "unknown";
+    const page = effects.find(function (effect) {
+        return effect.type === "notification" &&
+            (effect.name === "PAGE_SELECT" || effect.name === "HOME_PAGE");
+    });
+
+    if (page && page.name === "PAGE_SELECT") {
+        return "select " + label + " PAGE_SELECT " + page.payload;
+    }
+    if (page) {
+        return "select " + label + " HOME_PAGE";
+    }
+    if (!row) {
+        return "select skipped: no highlighted row";
+    }
+    if (effects.length === 0) {
+        return "select skipped: menu is closed";
+    }
+    if (row.kind === "command") {
+        return "select " + label + " skipped: command " + row.command + ", not a page";
+    }
+    if (row.kind === "confirm") {
+        return "select " + label + " skipped: first Select only confirms";
+    }
+    return "select " + label + " skipped: no page notification";
+}
+
 const api = {
     createMenu: createMenu,
-    dispatch: dispatch
+    dispatch: dispatch,
+    describeSelect: describeSelect
 };
 
 if (typeof module === "object" && module.exports) {

@@ -123,6 +123,11 @@ Module.register("MMM-ButtonMenu", {
         }
         const result = this.menuState.dispatch(this.menu, event);
         this.menu = result.state;
+        if (event === "select" && this.menuState.describeSelect) {
+            this.sendSocketNotification("SELECT_LOG", {
+                line: this.menuState.describeSelect(result)
+            });
+        }
         this.applyEffects(result.effects);
         try {
             this.syncOverlay();

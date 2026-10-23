@@ -103,6 +103,10 @@ module.exports = NodeHelper.create({
             this.screenAck.answered(payload);
         }
 
+        if (notification === "SELECT_LOG" && payload && payload.line) {
+            console.log("[MMM-ButtonMenu] " + payload.line);
+        }
+
         if (notification === "RUN_COMMAND") {
             this.runCommand(payload || {});
         }
