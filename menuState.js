@@ -8,7 +8,6 @@
 
 const SYSTEM_ROWS = [
     { label: "Blank", kind: "command", command: "blank" },
-    { label: "Unblank", kind: "command", command: "unblank" },
     { label: "Restart MagicMirror", kind: "confirm", command: "restart" },
     { label: "Reboot", kind: "confirm", command: "reboot" }
 ];
