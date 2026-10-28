@@ -55,8 +55,8 @@ test("Menu opens the menu", () => {
     assert.equal(opened.state.rows[0].label, "Primary");
     assert.equal(opened.state.rows[0].kind, "home");
     assert.deepEqual(
-        opened.state.rows.slice(-4).map((row) => row.label),
-        ["Blank", "Unblank", "Restart MagicMirror", "Reboot"]
+        opened.state.rows.slice(-3).map((row) => row.label),
+        ["Blank", "Restart MagicMirror", "Reboot"]
     );
     assert.equal(
         opened.state.rows.find((row) => row.command === "blank").kind,
