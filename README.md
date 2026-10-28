@@ -151,4 +151,4 @@ While an alternate page is up, this module also sends `PAUSE_ROTATION`. Returnin
 npm test
 ```
 
-That runs `node --test`. The tests cover the menu state machine only. They do not open GPIO devices and they do not run blank, unblank, restart, or reboot.
+That runs `node --test`. The tests cover the menu state machine only. They do not open GPIO devices and they do not run blank, restart, or reboot.
