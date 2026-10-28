@@ -1,6 +1,6 @@
 {
   "name": "mmm-buttonmenu",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "MagicMirror module: three GPIO buttons open a page menu and return to the primary page.",
   "scripts": {
